@@ -9,3 +9,4 @@ sqlalchemy>=2.0
 psycopg[binary]>=3.1
 apscheduler>=3.10
 anthropic>=0.40
+mcp>=2.0
