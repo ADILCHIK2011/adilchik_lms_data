@@ -18,5 +18,7 @@ services:
         sync: false
       - key: TELEGRAM_ALLOWED_CHAT_IDS
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false

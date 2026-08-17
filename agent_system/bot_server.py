@@ -137,7 +137,7 @@ async def _handle_free_text(chat_id: int | str, text: str) -> None:
     """AI (Claude + MCP tools) if a key is configured, else the keyword
     router above. Either path always replies — never leaves the user hanging.
     """
-    if settings.anthropic_api_key:
+    if settings.groq_api_key or settings.anthropic_api_key:
         try:
             ai_text = await ai_agent.answer(text)
         except Exception:  # noqa: BLE001 - AI failure must fall back, not crash
@@ -209,7 +209,7 @@ async def telegram_webhook(
         ai_note = (
             "\nIstalgan savolni yozing (masalan: 'eng ko'p coin bor o'quvchi kim?') — "
             "sun'iy intellekt ma'lumotlar asosida javob beradi."
-            if settings.anthropic_api_key
+            if (settings.groq_api_key or settings.anthropic_api_key)
             else ""
         )
         send_message(

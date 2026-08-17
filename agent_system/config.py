@@ -36,9 +36,13 @@ class Settings:
     weight_score: float = float(os.getenv("WEIGHT_SCORE", "0.35"))
     weak_topic_score_threshold: float = float(os.getenv("WEAK_TOPIC_SCORE_THRESHOLD", "65"))
 
-    # --- LLM (optional, Agent 2 narrative recommendations) ---
+    # --- LLM (optional, Agent 2 narrative recommendations + bot_server.py AI chat) ---
     anthropic_api_key: str | None = os.getenv("ANTHROPIC_API_KEY") or None
     llm_model: str = os.getenv("LLM_MODEL", "claude-sonnet-5")
+    # Free alternative (console.groq.com/keys, no credit card) — used by ai_agent.py
+    # when set, so the Telegram bot's free-text AI works without a paid key.
+    groq_api_key: str | None = os.getenv("GROQ_API_KEY") or None
+    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
     # --- Postgres / cloud DB (Agent 3) ---
     database_url: str | None = os.getenv("DATABASE_URL") or None
