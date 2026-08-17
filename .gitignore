@@ -1,0 +1,8 @@
+agent_system/.env
+agent_system/__pycache__/
+__pycache__/
+reports/fallback_queue.sqlite3
+reports/*.json
+*.pyc
+.claude/
+export_test.zip

@@ -1,0 +1,484 @@
+// ============================================================================
+// LMS — Prisma schema (PostgreSQL)
+// Datasetdagi JSON strukturaga mos. `npx prisma migrate dev` bilan ishlaydi.
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------------------------------------------------ ENUMS
+
+enum Role {
+  STUDENT
+  MENTOR
+  TUTOR
+  CURATOR
+}
+
+enum Gender {
+  MALE
+  FEMALE
+}
+
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT_EXCUSED
+  ABSENT_UNEXCUSED
+}
+
+enum HomeworkStatus {
+  SUBMITTED_ON_TIME
+  SUBMITTED_LATE
+  NOT_SUBMITTED
+}
+
+enum LessonType {
+  LECTURE
+  PRACTICE
+  EXAM
+}
+
+enum CoinTxType {
+  EARN
+  SPEND
+  PENALTY
+}
+
+enum CoinReason {
+  ATTENDANCE
+  ATTENDANCE_LATE
+  STREAK_BONUS
+  HOMEWORK
+  EXCELLENT_WORK
+  ACTIVITY
+  MAKEUP_COMPLETED
+  ABSENT_UNEXCUSED
+  SHOP
+}
+
+enum MakeupMode {
+  TUTOR_SESSION
+  VIDEO_RECORDING
+  SELF_STUDY
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum PaymentStatus {
+  PAID
+  LATE
+  UNPAID
+}
+
+enum ContactChannel {
+  TELEGRAM
+  PHONE
+  SMS
+}
+
+enum ContactReason {
+  ABSENCE_ALERT
+  MONTHLY_REPORT
+  PROGRESS_UPDATE
+  PAYMENT_REMINDER
+  HOMEWORK_ALERT
+  PRAISE
+  MEETING_INVITE
+}
+
+// ------------------------------------------------------------------ XODIM
+
+model Staff {
+  id              Int      @id @default(autoincrement())
+  code            String   @unique
+  role            Role
+  firstName       String   @map("first_name")
+  lastName        String   @map("last_name")
+  gender          Gender
+  phone           String
+  email           String   @unique
+  telegram        String?
+  specialization  String?
+  experienceYears Int      @default(0) @map("experience_years")
+  rating          Decimal  @default(0) @db.Decimal(3, 2)
+  monthlySalary   BigInt   @map("monthly_salary")
+  hiredAt         DateTime @map("hired_at") @db.Date
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  mentorGroups   Group[] @relation("GroupMentor")
+  tutorGroups    Group[] @relation("GroupTutor")
+  curatorGroups  Group[] @relation("GroupCurator")
+
+  lessons          Lesson[]
+  markedAttendance Attendance[]
+  createdHomework  Homework[]
+  checkedWork      Submission[]
+  tutorSessions    TutorSession[]
+  makeups          Makeup[]
+  contacts         CuratorContact[]
+
+  @@index([role, status])
+  @@map("staff")
+}
+
+// ------------------------------------------------------------------ KURS
+
+model Course {
+  code           String  @id
+  name           String
+  level          String
+  durationMonths Int     @map("duration_months")
+  lessonsPerWeek Int     @map("lessons_per_week")
+  monthlyFee     BigInt  @map("monthly_fee")
+  ageRange       String  @map("age_range")
+  topics         String[]
+
+  groups Group[]
+
+  @@map("courses")
+}
+
+model Group {
+  id              Int      @id @default(autoincrement())
+  name            String   @unique
+  courseCode      String   @map("course_code")
+  mentorId        Int      @map("mentor_id")
+  tutorId         Int      @map("tutor_id")
+  curatorId       Int      @map("curator_id")
+  room            String
+  scheduleType    String   @map("schedule_type")
+  scheduleDays    Int[]    @map("schedule_days")   // 1=Dush … 7=Yak
+  lessonStart     String   @map("lesson_start")
+  lessonEnd       String   @map("lesson_end")
+  durationMin     Int      @default(90) @map("duration_min")
+  monthlyFee      BigInt   @map("monthly_fee")
+  durationMonths  Int      @map("duration_months")
+  startedAt       DateTime @map("started_at") @db.Date
+  status          String   @default("active")
+
+  course  Course @relation(fields: [courseCode], references: [code])
+  mentor  Staff  @relation("GroupMentor",  fields: [mentorId],  references: [id])
+  tutor   Staff  @relation("GroupTutor",   fields: [tutorId],   references: [id])
+  curator Staff  @relation("GroupCurator", fields: [curatorId], references: [id])
+
+  students     Student[]
+  lessons      Lesson[]
+  attendance   Attendance[]
+  homework     Homework[]
+  submissions  Submission[]
+  tutorSessions TutorSession[]
+  payments     Payment[]
+
+  @@index([courseCode])
+  @@index([mentorId])
+  @@index([curatorId])
+  @@map("groups")
+}
+
+// --------------------------------------------------------------- STUDENT
+
+model Student {
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  firstName   String   @map("first_name")
+  lastName    String   @map("last_name")
+  gender      Gender
+  birthDate   DateTime @map("birth_date") @db.Date
+  phone       String
+  telegram    String?
+  school      String?
+  grade       Int?
+  district    String?
+  groupId     Int      @map("group_id")
+  enrolledAt  DateTime @map("enrolled_at") @db.Date
+  monthlyFee  BigInt   @map("monthly_fee")
+  status      String   @default("active")
+
+  // coins — hisoblangan qiymat, ledgerdan (CoinTransaction) yig'iladi
+  coinsBalance Int @default(0) @map("coins_balance")
+
+  // kesh statistika (cron/trigger bilan yangilanadi)
+  attendanceRate    Decimal?  @db.Decimal(5, 2) @map("attendance_rate")
+  homeworkRate      Decimal?  @db.Decimal(5, 2) @map("homework_rate")
+  avgScore          Decimal?  @db.Decimal(5, 2) @map("avg_score")
+  missedNotCovered  Int       @default(0) @map("missed_not_covered")
+  isBehind          Boolean   @default(false) @map("is_behind")
+  performanceScore  Decimal?  @db.Decimal(5, 2) @map("performance_score")
+  riskLevel         RiskLevel @default(LOW) @map("risk_level")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  group        Group             @relation(fields: [groupId], references: [id])
+  parents      Parent[]
+  attendance   Attendance[]
+  submissions  Submission[]
+  coinTx       CoinTransaction[]
+  makeups      Makeup[]
+  tutorSessions TutorSession[]
+  contacts     CuratorContact[]
+  payments     Payment[]
+
+  @@index([groupId])
+  @@index([riskLevel])
+  @@index([isBehind])
+  @@map("students")
+}
+
+/** Ota-ona — curator shular bilan bog'lanadi */
+model Parent {
+  id               Int            @id @default(autoincrement())
+  studentId        Int            @map("student_id")
+  fullName         String         @map("full_name")
+  relation         String
+  phone            String
+  telegram         String?
+  preferredContact ContactChannel @default(TELEGRAM) @map("preferred_contact")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("parents")
+}
+
+// ----------------------------------------------------------------- DARS
+
+model Lesson {
+  id           Int        @id @default(autoincrement())
+  groupId      Int        @map("group_id")
+  lessonNumber Int        @map("lesson_number")
+  date         DateTime   @db.Date
+  startTime    String     @map("start_time")
+  endTime      String     @map("end_time")
+  topic        String
+  module       Int
+  type         LessonType @default(LECTURE)
+  mentorId     Int        @map("mentor_id")
+  room         String
+  hasHomework  Boolean    @default(true) @map("has_homework")
+  status       String     @default("planned")
+
+  group      Group        @relation(fields: [groupId], references: [id])
+  mentor     Staff        @relation(fields: [mentorId], references: [id])
+  attendance Attendance[]
+  homework   Homework?
+  makeups    Makeup[]
+  coinTx     CoinTransaction[]
+
+  @@unique([groupId, lessonNumber])
+  @@index([date])
+  @@map("lessons")
+}
+
+model Attendance {
+  id                Int              @id @default(autoincrement())
+  studentId         Int              @map("student_id")
+  lessonId          Int              @map("lesson_id")
+  groupId           Int              @map("group_id")
+  date              DateTime         @db.Date
+  status            AttendanceStatus
+  minutesLate       Int              @default(0) @map("minutes_late")
+  markedByMentorId  Int              @map("marked_by_mentor_id")
+  note              String?
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson  @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id])
+  mentor  Staff   @relation(fields: [markedByMentorId], references: [id])
+
+  @@unique([studentId, lessonId])
+  @@index([groupId, date])
+  @@index([status])
+  @@map("attendance")
+}
+
+// ------------------------------------------------------------ UY VAZIFA
+
+model Homework {
+  id                 Int      @id @default(autoincrement())
+  lessonId           Int      @unique @map("lesson_id")
+  groupId            Int      @map("group_id")
+  title              String
+  assignedDate       DateTime @map("assigned_date") @db.Date
+  dueDate            DateTime @map("due_date") @db.Date
+  maxScore           Int      @default(100) @map("max_score")
+  coinsReward        Int      @map("coins_reward")
+  difficulty         String
+  createdByMentorId  Int      @map("created_by_mentor_id")
+
+  lesson      Lesson       @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  group       Group        @relation(fields: [groupId], references: [id])
+  mentor      Staff        @relation(fields: [createdByMentorId], references: [id])
+  submissions Submission[]
+  coinTx      CoinTransaction[]
+
+  @@index([groupId, dueDate])
+  @@map("homework")
+}
+
+model Submission {
+  id                 Int            @id @default(autoincrement())
+  homeworkId         Int            @map("homework_id")
+  studentId          Int            @map("student_id")
+  groupId            Int            @map("group_id")
+  submittedAt        DateTime?      @map("submitted_at")
+  status             HomeworkStatus @default(NOT_SUBMITTED)
+  daysLate           Int?           @map("days_late")
+  score              Int            @default(0)
+  coinsEarned        Int            @default(0) @map("coins_earned")
+  mentorFeedback     String?        @map("mentor_feedback")
+  checkedByMentorId  Int?           @map("checked_by_mentor_id")
+
+  homework Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  student  Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group    Group    @relation(fields: [groupId], references: [id])
+  mentor   Staff?   @relation(fields: [checkedByMentorId], references: [id])
+
+  @@unique([homeworkId, studentId])
+  @@index([studentId, status])
+  @@map("submissions")
+}
+
+// ---------------------------------------------------------------- COINS
+
+model CoinTransaction {
+  id           Int        @id @default(autoincrement())
+  studentId    Int        @map("student_id")
+  date         DateTime   @db.Date
+  type         CoinTxType
+  reason       CoinReason
+  description  String
+  amount       Int        // spend/penalty da manfiy
+  balanceAfter Int        @map("balance_after")
+  lessonId     Int?       @map("ref_lesson_id")
+  homeworkId   Int?       @map("ref_homework_id")
+  itemName     String?    @map("ref_item")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  student  Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson   Lesson?   @relation(fields: [lessonId], references: [id])
+  homework Homework? @relation(fields: [homeworkId], references: [id])
+
+  @@index([studentId, date])
+  @@index([reason])
+  @@map("coin_transactions")
+}
+
+model ShopItem {
+  id        Int     @id @default(autoincrement())
+  name      String  @unique
+  costCoins Int     @map("cost_coins")
+  stock     Int     @default(0)
+  active    Boolean @default(true)
+
+  @@map("shop_items")
+}
+
+// ------------------------------------- QOLDIRILGAN DARSNI YOPISH (MAKEUP)
+
+model Makeup {
+  id             Int        @id @default(autoincrement())
+  studentId      Int        @map("student_id")
+  missedLessonId Int        @map("missed_lesson_id")
+  makeupDate     DateTime   @map("makeup_date") @db.Date
+  mode           MakeupMode
+  tutorId        Int?       @map("tutor_id")
+  durationMin    Int        @map("duration_min")
+  topic          String
+  completed      Boolean    @default(false)
+  quizScore      Int?       @map("quiz_score")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lesson  Lesson  @relation(fields: [missedLessonId], references: [id])
+  tutor   Staff?  @relation(fields: [tutorId], references: [id])
+
+  @@unique([studentId, missedLessonId])
+  @@index([completed])
+  @@map("makeups")
+}
+
+// --------------------------------------------------- TUTOR QO'SHIMCHA DARS
+
+model TutorSession {
+  id           Int      @id @default(autoincrement())
+  studentId    Int      @map("student_id")
+  tutorId      Int      @map("tutor_id")
+  groupId      Int      @map("group_id")
+  date         DateTime @db.Date
+  startTime    String   @map("start_time")
+  durationMin  Int      @map("duration_min")
+  type         String   // individual | mini_group
+  topic        String
+  reason       String
+  attended     Boolean  @default(true)
+  progressNote String?  @map("progress_note")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  tutor   Staff   @relation(fields: [tutorId], references: [id])
+  group   Group   @relation(fields: [groupId], references: [id])
+
+  @@index([tutorId, date])
+  @@index([studentId])
+  @@map("tutor_sessions")
+}
+
+// --------------------------------------------- CURATOR ↔ OTA-ONA ALOQASI
+
+model CuratorContact {
+  id              Int            @id @default(autoincrement())
+  curatorId       Int            @map("curator_id")
+  studentId       Int            @map("student_id")
+  date            DateTime       @db.Date
+  channel         ContactChannel
+  reason          ContactReason
+  subject         String
+  summary         String?
+  parentResponse  String?        @map("parent_response")
+  resolved        Boolean        @default(false)
+  followUpNeeded  Boolean        @default(false) @map("follow_up_needed")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  curator Staff   @relation(fields: [curatorId], references: [id])
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([curatorId, date])
+  @@index([studentId])
+  @@index([resolved, followUpNeeded])
+  @@map("curator_contacts")
+}
+
+// --------------------------------------------------------------- TO'LOV
+
+model Payment {
+  id          Int           @id @default(autoincrement())
+  studentId   Int           @map("student_id")
+  groupId     Int           @map("group_id")
+  period      String        // "2026-04"
+  amount      BigInt
+  dueDate     DateTime      @map("due_date") @db.Date
+  paidAt      DateTime?     @map("paid_at") @db.Date
+  status      PaymentStatus @default(UNPAID)
+  method      String?
+  discountPct Int           @default(0) @map("discount_pct")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id])
+
+  @@unique([studentId, period])
+  @@index([status, dueDate])
+  @@map("payments")
+}
