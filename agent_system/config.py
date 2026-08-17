@@ -14,7 +14,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Explicit path, not the bare load_dotenv() magic frame-walk: that lookup is
+# unreliable once this module is reached via a package import (as it always
+# is here) rather than run as a script, and silently finding nothing is far
+# worse than a missing .env being obvious.
+load_dotenv(dotenv_path=Path(__file__).resolve().parent / ".env")
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -42,7 +46,7 @@ class Settings:
     # Free alternative (console.groq.com/keys, no credit card) — used by ai_agent.py
     # when set, so the Telegram bot's free-text AI works without a paid key.
     groq_api_key: str | None = os.getenv("GROQ_API_KEY") or None
-    groq_model: str = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+    groq_model: str = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 
     # --- Postgres / cloud DB (Agent 3) ---
     database_url: str | None = os.getenv("DATABASE_URL") or None

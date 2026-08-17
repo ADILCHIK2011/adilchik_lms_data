@@ -68,7 +68,7 @@ async def _call_mcp_tool(session: ClientSession, name: str, arguments: dict) -> 
     try:
         result = await session.call_tool(name, arguments)
         text = "\n".join(b.text for b in result.content if hasattr(b, "text"))
-        return text, result.isError
+        return text, result.is_error
     except Exception as exc:  # noqa: BLE001
         logger.exception("MCP tool chaqiruvi xato berdi: %s", name)
         return f"Vosita xatosi: {exc}", True
